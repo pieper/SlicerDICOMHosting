@@ -17,6 +17,8 @@
 
 // Qt includes
 #include <QDebug>
+#include <QDockWidget>
+#include <QPushButton>
 
 // SlicerQt includes
 #include "qSlicerHostedApplicationModuleWidget.h"
@@ -28,6 +30,9 @@ class qSlicerHostedApplicationModuleWidgetPrivate: public Ui_qSlicerHostedApplic
 {
 public:
   qSlicerHostedApplicationModuleWidgetPrivate();
+
+  QDockWidget *Dock;
+  QPushButton *FinishedButton;
 };
 
 //-----------------------------------------------------------------------------
@@ -36,6 +41,8 @@ public:
 //-----------------------------------------------------------------------------
 qSlicerHostedApplicationModuleWidgetPrivate::qSlicerHostedApplicationModuleWidgetPrivate()
 {
+  this->Dock = 0;
+  this->FinishedButton = 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -58,6 +65,14 @@ void qSlicerHostedApplicationModuleWidget::setup()
 {
   Q_D(qSlicerHostedApplicationModuleWidget);
   d->setupUi(this);
+
+  // Create a floating 
+  d->Dock = new QDockWidget();
+  d->FinishedButton = new QPushButton(d->Dock);
+  d->FinishedButton->setText("Finalize Hosted Application Task\n(push this when finished with operation)");
+  d->Dock->setWidget(d->FinishedButton);
+  d->Dock->setFloating(true);
+  d->Dock->show();
   this->Superclass::setup();
 }
 

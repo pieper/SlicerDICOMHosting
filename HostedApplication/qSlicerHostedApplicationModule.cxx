@@ -64,7 +64,7 @@ qSlicerHostedApplicationModule::~qSlicerHostedApplicationModule()
 //-----------------------------------------------------------------------------
 QString qSlicerHostedApplicationModule::helpText()const
 {
-  return "This is a loadable module bundled in an extension";
+  return "This uses a loadable module bundled in an extension to make slicer behave as a hosted application according to the DICOM Application Hosting specification.";
 }
 
 //-----------------------------------------------------------------------------
@@ -77,7 +77,7 @@ QString qSlicerHostedApplicationModule::acknowledgementText()const
 QStringList qSlicerHostedApplicationModule::contributors()const
 {
   QStringList moduleContributors;
-  moduleContributors << QString("Jean-Christophe Fillion-Robin (Kitware)");
+  moduleContributors << QString("Steve Pieper (Isomics), Ivo Wolf (DKFZ), Lawrence Tarbox (Washington University, St. Louis)");
   return moduleContributors;
 }
 
@@ -90,7 +90,7 @@ QIcon qSlicerHostedApplicationModule::icon()const
 //-----------------------------------------------------------------------------
 QStringList qSlicerHostedApplicationModule::categories() const
 {
-  return QStringList() << "Examples";
+  return QStringList() << "Servers";
 }
 
 //-----------------------------------------------------------------------------
