@@ -18,6 +18,11 @@ if(NOT Slicer_SOURCE_DIR)
 endif()
 
 #-----------------------------------------------------------------------------
+find_package(CTK REQUIRED)
+include(${CTK_DIR}/CTKPluginUseFile.cmake)
+include(${CTK_DIR}/CTKExports.cmake)
+
+#-----------------------------------------------------------------------------
 add_subdirectory(HostedApplication)
 
 #-----------------------------------------------------------------------------

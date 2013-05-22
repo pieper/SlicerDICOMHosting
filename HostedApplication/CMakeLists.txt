@@ -18,6 +18,8 @@ set(MODULE_INCLUDE_DIRECTORIES
   ${CMAKE_CURRENT_BINARY_DIR}/Logic
   ${CMAKE_CURRENT_SOURCE_DIR}/Widgets
   ${CMAKE_CURRENT_BINARY_DIR}/Widgets
+  ${CTKPluginFramework_INCLUDE_DIRS}
+  ${org_commontk_dah_hostedapp_INCLUDE_DIRS}
   )
 
 set(MODULE_SRCS
@@ -25,11 +27,13 @@ set(MODULE_SRCS
   qSlicer${MODULE_NAME}Module.h
   qSlicer${MODULE_NAME}ModuleWidget.cxx
   qSlicer${MODULE_NAME}ModuleWidget.h
+  qSlicerDicomAppLogic.cxx
   )
 
 set(MODULE_MOC_SRCS
   qSlicer${MODULE_NAME}Module.h
   qSlicer${MODULE_NAME}ModuleWidget.h
+  qSlicerDicomAppLogic.h
   )
 
 set(MODULE_UI_SRCS
@@ -39,12 +43,16 @@ set(MODULE_UI_SRCS
 set(MODULE_TARGET_LIBRARIES
   vtkSlicer${MODULE_NAME}ModuleLogic
   qSlicer${MODULE_NAME}ModuleWidgets
+  CTKPluginFramework
+  org_commontk_dah_hostedapp
   )
 
 set(MODULE_RESOURCES
   Resources/qSlicer${MODULE_NAME}Module.qrc
   )
 
+LINK_DIRECTORIES(${CTK_LIBRARY_DIRS} ${org_commontk_dah_exampleapp_LIBRARY_DIRS})
+  
 #-----------------------------------------------------------------------------
 slicerMacroBuildQtModule(
   NAME ${MODULE_NAME}

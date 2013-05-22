@@ -24,12 +24,29 @@
 #include "qSlicerHostedApplicationModuleWidget.h"
 #include "ui_qSlicerHostedApplicationModuleWidget.h"
 
+// CTKPluginFramework includes
+#include <ctkConfig.h>
+#include <ctkPluginFrameworkFactory.h>
+#include <ctkPluginFramework.h>
+#include <ctkPluginException.h>
+#include <ctkPluginContext.h>
+
+#include <qSlicerDicomAppLogic.h>
+
+// Qt includes for DAH
+#include <QDebug>
+#include <QString>
+#include <QStringList>
+#include <QDirIterator>
+
 //-----------------------------------------------------------------------------
 /// \ingroup Slicer_QtModules_ExtensionTemplate
 class qSlicerHostedApplicationModuleWidgetPrivate: public Ui_qSlicerHostedApplicationModuleWidget
 {
 public:
   qSlicerHostedApplicationModuleWidgetPrivate();
+
+  qSlicerDicomAppLogic* AppLogic;
 
   QDockWidget *Dock;
   QPushButton *FinishedButton;
@@ -41,6 +58,7 @@ public:
 //-----------------------------------------------------------------------------
 qSlicerHostedApplicationModuleWidgetPrivate::qSlicerHostedApplicationModuleWidgetPrivate()
 {
+  this->AppLogic = 0;
   this->Dock = 0;
   this->FinishedButton = 0;
 }
@@ -66,6 +84,79 @@ void qSlicerHostedApplicationModuleWidget::setup()
   Q_D(qSlicerHostedApplicationModuleWidget);
   d->setupUi(this);
 
+  // CTK plugin Framework setup
+  QString hostURL = "http://localhost:8080/HostInterface";//parsedArgs.value("hostURL").toString();
+  QString appURL = "http://localhost:8081/ApplicationInterface";//parsedArgs.value("applicationURL").toString();
+  qDebug() << "appURL is: " << appURL << " . Extracted port is: " << QUrl(appURL).port();
+
+  // pass further parameters the plugins
+  ctkProperties fwProps;
+  fwProps.insert("dah.hostURL", hostURL);
+  fwProps.insert("dah.appURL", appURL);
+  fwProps.insert(ctkPluginConstants::FRAMEWORK_STORAGE_CLEAN, ctkPluginConstants::FRAMEWORK_STORAGE_CLEAN_ONFIRSTINIT);
+
+  ctkPluginFrameworkFactory fwFactory(fwProps);
+  QSharedPointer<ctkPluginFramework> framework = fwFactory.getFramework();
+  try
+    {
+    framework->init();
+    }
+  catch (const ctkPluginException& exc)
+    {
+    qCritical() << "Failed to initialize the plug-in framework:" << exc;
+    return;
+    }
+
+#ifdef CMAKE_INTDIR
+  QString pluginPath = CTK_PLUGIN_DIR CMAKE_INTDIR "/";
+#else
+  QString pluginPath = CTK_PLUGIN_DIR;
+#endif
+
+  qApp->addLibraryPath(pluginPath);
+
+  QStringList libFilter;
+  libFilter << "*.dll" << "*.so" << "*.dylib";
+  QDirIterator dirIter(pluginPath, libFilter, QDir::Files);
+
+  QStringList pluginsToInstall;
+  pluginsToInstall << "org_commontk_dah_core." << "org_commontk_dah_hostedapp";
+
+  QList<QSharedPointer<ctkPlugin> > installedPlugins;
+  while(dirIter.hasNext())
+    {
+    try
+      {
+      QString fileLocation = dirIter.next();
+      foreach(QString pluginToInstall, pluginsToInstall)
+        {
+        if (fileLocation.contains(pluginToInstall))
+          {
+          QSharedPointer<ctkPlugin> plugin = framework->getPluginContext()->installPlugin(QUrl::fromLocalFile(fileLocation));
+          installedPlugins << plugin;
+          break;
+          }
+        }
+      }
+    catch (const ctkPluginException& e)
+      {
+      qCritical() << e.what();
+      }
+    }
+
+  framework->start();
+
+  foreach(QSharedPointer<ctkPlugin> plugin, installedPlugins)
+    {
+    plugin->start();
+    }
+
+  ctkPluginContext* context = fwFactory.getFramework()->getPluginContext();
+  d->AppLogic = new qSlicerDicomAppLogic(context);
+  context->registerService<ctkDicomAppInterface>(d->AppLogic);
+
+  connect(d->AppLogic, SIGNAL(dataAvailable()), this, SLOT(onDataAvailable()));
+
   // Create a floating 
   d->Dock = new QDockWidget();
   d->FinishedButton = new QPushButton(d->Dock);
@@ -76,3 +167,48 @@ void qSlicerHostedApplicationModuleWidget::setup()
   this->Superclass::setup();
 }
 
+#include <ctkDicomAvailableDataHelper.h>
+#include <ctkDicomHostInterface.h>
+//-----------------------------------------------------------------------------
+void qSlicerHostedApplicationModuleWidget::onDataAvailable()
+{
+  Q_D(qSlicerHostedApplicationModuleWidget);
+  const ctkDicomAppHosting::AvailableData& data = d->AppLogic->getIncomingAvailableData();
+  if(data.patients.count()==0)
+    return;
+  const ctkDicomAppHosting::Patient& firstpatient = *data.patients.begin();
+  QList<QUuid> uuidlist = ctkDicomAvailableDataHelper::getAllUuids(firstpatient);
+
+  QString transfersyntax("1.2.840.10008.1.2.1");
+  QList<QString> transfersyntaxlist;
+  transfersyntaxlist.append(transfersyntax);
+  QList<ctkDicomAppHosting::ObjectLocator> locators;
+  locators = d->AppLogic->getHostInterface()->getData(uuidlist, transfersyntaxlist, false);
+  qDebug() << "got locators! " << QString().setNum(locators.count());
+
+  QString s;
+  s=s+" loc.count:"+QString().setNum(locators.count());
+  if(locators.count()>0)
+  {
+    s=s+" URI: "+locators.begin()->URI +" locatorUUID: "+locators.begin()->locator+" sourceUUID: "+locators.begin()->source;
+    qDebug() << "URI: " << locators.begin()->URI;
+    QString filename = locators.begin()->URI;
+    if(filename.startsWith("file:/",Qt::CaseInsensitive))
+      filename=filename.remove(0,8);
+    qDebug()<<filename;
+    if(QFileInfo(filename).exists())
+    {
+      try {
+        qDebug() << "Everything looks find: now we should load the following file: " << filename;
+      }
+      catch(...)
+      {
+        qCritical() << "Caught exception while trying to load file" << filename;
+      }
+    }
+    else
+    {
+      qCritical() << "File does not exist: " << filename;
+    }
+  }
+}

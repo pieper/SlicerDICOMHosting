@@ -39,7 +39,7 @@ public:
   virtual ~qSlicerHostedApplicationModuleWidget();
 
 public slots:
-
+  void onDataAvailable();
 
 protected:
   QScopedPointer<qSlicerHostedApplicationModuleWidgetPrivate> d_ptr;
