@@ -10,8 +10,10 @@ Here is a useful line for starting slicer with an experimental build of this ext
 </pre>
 
 <b>The current implementation may still aspect hard-coded URLs for communication:</b> 
+For windows you may need to use the following syntax for the argument to --python-code:
 <pre>
 --hostURL http://localhost:8080/HostInterface --applicationURL http://localhost:8081/ApplicationInterface
+ "slicer.util.mainWindow().moduleSelector().selectModule(\"HostedApplication\")"
 </pre>
 
 
