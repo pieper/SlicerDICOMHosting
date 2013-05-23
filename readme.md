@@ -13,7 +13,6 @@ For windows you may need to use the following syntax for the argument to --pytho
 <pre>
  "slicer.util.mainWindow().moduleSelector().selectModule(\"HostedApplication\")"
 </pre>
-
 <b>The current implementation may still aspect hard-coded URLs for communication:</b> 
 <pre>
 --hostURL http://localhost:8080/HostInterface --applicationURL http://localhost:8081/ApplicationInterface
