@@ -38,6 +38,10 @@ public:
   qSlicerHostedApplicationModuleWidget(QWidget *parent=0);
   virtual ~qSlicerHostedApplicationModuleWidget();
 
+  // utilies available for processing data from the host
+  bool loadDICOMSeriesAsVolume(QString seriesUID);
+  void addDICOMFileToDatabase(QString filePath);
+
 public slots:
   void onDataAvailable();
 

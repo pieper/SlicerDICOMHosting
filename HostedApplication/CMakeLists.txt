@@ -45,14 +45,18 @@ set(MODULE_TARGET_LIBRARIES
   qSlicer${MODULE_NAME}ModuleWidgets
   CTKPluginFramework
   org_commontk_dah_hostedapp
+  vtkSlicerVolumesModuleLogic
   )
 
 set(MODULE_RESOURCES
   Resources/qSlicer${MODULE_NAME}Module.qrc
   )
 
-LINK_DIRECTORIES(${CTK_LIBRARY_DIRS} ${org_commontk_dah_exampleapp_LIBRARY_DIRS})
-  
+LINK_DIRECTORIES(
+  ${CTK_LIBRARY_DIRS}
+  ${org_commontk_dah_hostedapp_LIBRARY_DIRS}
+  )
+
 #-----------------------------------------------------------------------------
 slicerMacroBuildQtModule(
   NAME ${MODULE_NAME}

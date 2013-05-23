@@ -31,6 +31,9 @@
 #include <ctkPluginException.h>
 #include <ctkPluginContext.h>
 
+// ctkDICOM includes
+#include <ctkDICOMDatabase.h>
+
 #include <qSlicerDicomAppLogic.h>
 
 // Qt includes for DAH
@@ -38,6 +41,22 @@
 #include <QString>
 #include <QStringList>
 #include <QDirIterator>
+
+// qSlicer includes
+#include "qSlicerAbstractCoreModule.h"
+#include "qSlicerApplication.h"
+#include <qSlicerModuleManager.h>
+
+// vtk includes
+#include <vtkStringArray.h>
+
+// vtkMRML includes
+#include <vtkMRMLScalarVolumeNode.h>
+#include <vtkMRMLSelectionNode.h>
+
+// vtkSlicer includes
+#include <vtkSlicerApplicationLogic.h>
+#include <vtkSlicerVolumesLogic.h>
 
 //-----------------------------------------------------------------------------
 /// \ingroup Slicer_QtModules_ExtensionTemplate
@@ -50,6 +69,7 @@ public:
 
   QDockWidget *Dock;
   QPushButton *FinishedButton;
+
 };
 
 //-----------------------------------------------------------------------------
@@ -157,7 +177,7 @@ void qSlicerHostedApplicationModuleWidget::setup()
 
   connect(d->AppLogic, SIGNAL(dataAvailable()), this, SLOT(onDataAvailable()));
 
-  // Create a floating 
+  // Create a floating
   d->Dock = new QDockWidget();
   d->FinishedButton = new QPushButton(d->Dock);
   d->FinishedButton->setText("Finalize Hosted Application Task\n(push this when finished with operation)");
@@ -167,8 +187,72 @@ void qSlicerHostedApplicationModuleWidget::setup()
   this->Superclass::setup();
 }
 
+
 #include <ctkDicomAvailableDataHelper.h>
 #include <ctkDicomHostInterface.h>
+
+//-----------------------------------------------------------------------------
+bool qSlicerHostedApplicationModuleWidget::loadDICOMSeriesAsVolume(QString seriesUID)
+{
+
+  // get the slicer volumes logic to use for loading
+  qSlicerAbstractCoreModule* volumesModule =
+    qSlicerApplication::application()->moduleManager()->module("Volumes");
+  vtkSlicerVolumesLogic* volumesLogic =
+    vtkSlicerVolumesLogic::SafeDownCast(volumesModule->logic());
+  if (!volumesLogic)
+    {
+    qCritical() << "No volumes logic available in slicer.";
+    return false;
+    }
+
+  // get the database
+  ctkDICOMDatabase* dicomDatabase = qSlicerApplication::application()->dicomDatabase();
+
+  // get the filepaths for each file in the series, and the series description to use as a name
+  QStringList seriesFiles = dicomDatabase->filesForSeries(seriesUID);
+  if (seriesFiles.size() == 0)
+    {
+    qCritical() << "There are no files in the database for the series: " << seriesUID;
+    return false;
+    }
+  QString seriesDescription = dicomDatabase->fileValue(seriesFiles[0], "0008,103e");
+  qDebug() << "Series Description: " << seriesDescription;
+
+  // get a vtkStringArray of all files that are part of the series
+  vtkSmartPointer<vtkStringArray> fileList = vtkSmartPointer<vtkStringArray>::New();
+  foreach(const QString &seriesFile, seriesFiles)
+    {
+    fileList->InsertNextValue(seriesFile.toLatin1().data());
+    }
+
+  // Perform the actual data loading
+  QString archetypeFilePath = seriesFiles[0];
+  const char *archetypeFilePathPointer = archetypeFilePath.toLatin1().data();
+  const char *volumeName = seriesDescription.toLatin1().data();
+  vtkMRMLScalarVolumeNode *volumeNode = volumesLogic->AddArchetypeScalarVolume(archetypeFilePathPointer,volumeName,0,fileList);
+  if (!volumeNode)
+    {
+    qCritical() << "Failed to load file: " << archetypeFilePath;
+    return false;
+    }
+
+  // automatically select the volume to display
+  vtkSlicerApplicationLogic *appLogic = qSlicerApplication::application()->applicationLogic();
+  vtkMRMLSelectionNode *selNode = appLogic->GetSelectionNode();
+  selNode->SetReferenceActiveVolumeID(volumeNode->GetID());
+  appLogic->PropagateVolumeSelection();
+
+  return true;
+}
+
+//-----------------------------------------------------------------------------
+void qSlicerHostedApplicationModuleWidget::addDICOMFileToDatabase(QString filePath)
+{
+  ctkDICOMDatabase* dicomDatabase = qSlicerApplication::application()->dicomDatabase();
+  dicomDatabase->insert(filePath);
+}
+
 //-----------------------------------------------------------------------------
 void qSlicerHostedApplicationModuleWidget::onDataAvailable()
 {
@@ -188,18 +272,19 @@ void qSlicerHostedApplicationModuleWidget::onDataAvailable()
 
   QString s;
   s=s+" loc.count:"+QString().setNum(locators.count());
-  if(locators.count()>0)
+  foreach(ctkDicomAppHosting::ObjectLocator locator, locators)
   {
-    s=s+" URI: "+locators.begin()->URI +" locatorUUID: "+locators.begin()->locator+" sourceUUID: "+locators.begin()->source;
-    qDebug() << "URI: " << locators.begin()->URI;
-    QString filename = locators.begin()->URI;
+    s=s+" URI: "+locator.URI +" locatorUUID: "+locator.locator+" sourceUUID: "+locator.source;
+    qDebug() << "URI: " << locator.URI;
+    QString filename = locator.URI;
     if(filename.startsWith("file:/",Qt::CaseInsensitive))
       filename=filename.remove(0,8);
     qDebug()<<filename;
     if(QFileInfo(filename).exists())
     {
       try {
-        qDebug() << "Everything looks find: now we should load the following file: " << filename;
+        qDebug() << "Everything looks great: now we will load the following file: " << filename;
+        this->addDICOMFileToDatabase(filename);
       }
       catch(...)
       {
@@ -211,4 +296,20 @@ void qSlicerHostedApplicationModuleWidget::onDataAvailable()
       qCritical() << "File does not exist: " << filename;
     }
   }
+  // Now the data should go from the database into slicer
+  foreach(ctkDicomAppHosting::Patient patient, data.patients)
+    {
+    foreach(ctkDicomAppHosting::Study study, patient.studies)
+      {
+      foreach(ctkDicomAppHosting::Series series, study.series)
+        {
+        qDebug() << "Now let's try loading the data!" << series.seriesUID;
+        bool result = this->loadDICOMSeriesAsVolume(series.seriesUID);
+        if (!result)
+          {
+          qCritical() << "Shoot!  Cannot load series: " << series.seriesUID;
+          }
+        }
+      }
+    }
 }
