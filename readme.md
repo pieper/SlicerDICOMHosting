@@ -9,11 +9,15 @@ Here is a useful line for starting slicer with an experimental build of this ext
   ./Slicer --python-code "slicer.util.mainWindow().moduleSelector().selectModule('HostedApplication')" --additional-module-paths ${MODULEBUILDPATH}
 </pre>
 
+For windows you may need to use the following syntax for the argument to --python-code (also in the batch file further below):
+<pre>
+ "slicer.util.mainWindow().moduleSelector().selectModule(\"HostedApplication\")"
+</pre>
+
 <b>The current implementation may still aspect hard-coded URLs for communication:</b> 
 <pre>
 --hostURL http://localhost:8080/HostInterface --applicationURL http://localhost:8081/ApplicationInterface
 </pre>
-
 
 Creating a working version of this requires that slicer be built against a version of CTK that includes DICOM Application Hosting support:
 <ul>
