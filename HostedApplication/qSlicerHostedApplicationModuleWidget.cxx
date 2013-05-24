@@ -18,6 +18,7 @@
 // Qt includes
 #include <QDebug>
 #include <QDockWidget>
+#include <QMessageBox>
 #include <QPushButton>
 
 // SlicerQt includes
@@ -48,10 +49,12 @@
 #include <qSlicerModuleManager.h>
 
 // vtk includes
+#include <vtkSmartPointer.h>
 #include <vtkStringArray.h>
 
 // vtkMRML includes
 #include <vtkMRMLScalarVolumeNode.h>
+#include <vtkMRMLScene.h>
 #include <vtkMRMLSelectionNode.h>
 
 // vtkSlicer includes
@@ -69,6 +72,8 @@ public:
 
   QDockWidget *Dock;
   QPushButton *FinishedButton;
+
+  QList< vtkSmartPointer<vtkMRMLScalarVolumeNode> > VolumeNodesFromHost;
 
 };
 
@@ -184,6 +189,9 @@ void qSlicerHostedApplicationModuleWidget::setup()
   d->Dock->setWidget(d->FinishedButton);
   d->Dock->setFloating(true);
   d->Dock->show();
+
+  connect(d->FinishedButton, SIGNAL(clicked()), this, SLOT(onFinished()));
+
   this->Superclass::setup();
 }
 
@@ -194,6 +202,7 @@ void qSlicerHostedApplicationModuleWidget::setup()
 //-----------------------------------------------------------------------------
 bool qSlicerHostedApplicationModuleWidget::loadDICOMSeriesAsVolume(QString seriesUID)
 {
+  Q_D(qSlicerHostedApplicationModuleWidget);
 
   // get the slicer volumes logic to use for loading
   qSlicerAbstractCoreModule* volumesModule =
@@ -236,6 +245,8 @@ bool qSlicerHostedApplicationModuleWidget::loadDICOMSeriesAsVolume(QString serie
     qCritical() << "Failed to load file: " << archetypeFilePath;
     return false;
     }
+  volumeNode->SetName(volumeName);
+  d->VolumeNodesFromHost << vtkSmartPointer<vtkMRMLScalarVolumeNode>(volumeNode);
 
   // automatically select the volume to display
   vtkSlicerApplicationLogic *appLogic = qSlicerApplication::application()->applicationLogic();
@@ -270,6 +281,8 @@ void qSlicerHostedApplicationModuleWidget::onDataAvailable()
   locators = d->AppLogic->getHostInterface()->getData(uuidlist, transfersyntaxlist, false);
   qDebug() << "got locators! " << QString().setNum(locators.count());
 
+  // go through the available data and add each dicom file into 
+  // the slicer local dicom database
   QString s;
   s=s+" loc.count:"+QString().setNum(locators.count());
   foreach(ctkDicomAppHosting::ObjectLocator locator, locators)
@@ -296,7 +309,8 @@ void qSlicerHostedApplicationModuleWidget::onDataAvailable()
       qCritical() << "File does not exist: " << filename;
     }
   }
-  // Now the data should go from the database into slicer
+
+  // Now the data should go from the database into slicer, with series mapped to volumes
   foreach(ctkDicomAppHosting::Patient patient, data.patients)
     {
     foreach(ctkDicomAppHosting::Study study, patient.studies)
@@ -305,11 +319,53 @@ void qSlicerHostedApplicationModuleWidget::onDataAvailable()
         {
         qDebug() << "Now let's try loading the data!" << series.seriesUID;
         bool result = this->loadDICOMSeriesAsVolume(series.seriesUID);
-        if (!result)
+        if (result)
+          {
+          qDebug() << "Load completed!";
+          }
+        else
           {
           qCritical() << "Shoot!  Cannot load series: " << series.seriesUID;
           }
         }
       }
+    }
+}
+
+//-----------------------------------------------------------------------------
+void qSlicerHostedApplicationModuleWidget::onFinished()
+{
+  Q_D(qSlicerHostedApplicationModuleWidget);
+
+  vtkMRMLScene *scene = qSlicerApplication::application()->mrmlScene();
+  vtkSmartPointer<vtkMRMLScalarVolumeNode> hostVolumeNode;
+  vtkMRMLScalarVolumeNode *slicerVolumeNode;
+
+  int volumeCount = scene->GetNumberOfNodesByClass("vtkMRMLScalarVolumeNode");
+  int volumeIndex;
+  for (volumeIndex = 0; volumeIndex < volumeCount; ++volumeIndex)
+    {
+    slicerVolumeNode = vtkMRMLScalarVolumeNode::SafeDownCast(
+                          scene->GetNthNodeByClass(volumeIndex, "vtkMRMLScalarVolumeNode"));
+    qDebug() << "Checking volume: " << QString(slicerVolumeNode->GetName());
+    bool newNode = true;
+    foreach (hostVolumeNode, d->VolumeNodesFromHost)
+      {
+      if (hostVolumeNode.GetPointer() == slicerVolumeNode)
+        {
+        newNode = false;
+        }
+      }
+    QString message("");
+    if (newNode)
+      {
+      message += "Found volume to return: ";
+      }
+    else
+      {
+      message += "This volume is not new: ";
+      }
+    message += QString(slicerVolumeNode->GetName());
+    QMessageBox::information(this, "Hosting", message);
     }
 }

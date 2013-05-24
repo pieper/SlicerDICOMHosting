@@ -44,6 +44,7 @@ public:
 
 public slots:
   void onDataAvailable();
+  void onFinished();
 
 protected:
   QScopedPointer<qSlicerHostedApplicationModuleWidgetPrivate> d_ptr;
