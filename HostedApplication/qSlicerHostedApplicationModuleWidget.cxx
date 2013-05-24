@@ -341,6 +341,10 @@ void qSlicerHostedApplicationModuleWidget::onFinished()
   vtkSmartPointer<vtkMRMLScalarVolumeNode> hostVolumeNode;
   vtkMRMLScalarVolumeNode *slicerVolumeNode;
 
+  // resultData will contain the information about the data which will be sent to the host
+  ctkDicomAppHosting::AvailableData resultData;
+  bool addedSth = false;
+
   int volumeCount = scene->GetNumberOfNodesByClass("vtkMRMLScalarVolumeNode");
   int volumeIndex;
   for (volumeIndex = 0; volumeIndex < volumeCount; ++volumeIndex)
@@ -364,8 +368,41 @@ void qSlicerHostedApplicationModuleWidget::onFinished()
     else
       {
       message += "This volume is not new: ";
+
+      // Request the proper output file location
+      QStringList preferredProtocols;
+      preferredProtocols.append("file:");
+      QString outputlocation = d->AppLogic->getHostInterface()->getOutputLocation(preferredProtocols);
+
+      // do the actual writing of the file -> TBD
+      QString filename = "filename-probably-determined-by-the-dicom-writer"; 
+
+      // add the created file to resultData
+      // if we have multiple files (which we probably will), we have to
+      // call this multiple times
+      ctkDicomAvailableDataHelper::addToAvailableData(resultData,
+        d->AppLogic->objectLocatorCache(),
+        filename);
+      addedSth = true; // yes, we added sth, so it worth to call publish later
       }
     message += QString(slicerVolumeNode->GetName());
     QMessageBox::information(this, "Hosting", message);
+    }
+
+  // publish our results: send it to the host
+  if(addedSth)
+    {
+    bool success = d->AppLogic->publishData(resultData, true);
+    qDebug() << "  publishData returned: " << success;
+    if(success)
+      {
+      // Tell the host that we are done
+      d->AppLogic->setInternalState(ctkDicomAppHosting::COMPLETED);
+      d->AppLogic->getHostInterface()->notifyStateChanged(ctkDicomAppHosting::COMPLETED);
+      }
+    else
+      {
+      qCritical() << "Failed to publish data";
+      }
     }
 }
